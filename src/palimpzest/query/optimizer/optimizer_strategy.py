@@ -7,6 +7,9 @@ from palimpzest.policy import Policy
 from palimpzest.query.optimizer.plan import PhysicalPlan, SentinelPlan
 from palimpzest.query.optimizer.primitives import Group
 
+# FOR SORTING CLAIM_1
+from functools import cmp_to_key
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,13 +133,40 @@ class ParetoStrategy(OptimizationStrategy):
         if any([policy.constraint(plan.plan_cost) for plan in plans]):
             plans = [plan for plan in plans if policy.constraint(plan.plan_cost)]
 
+            
+        # FIRST DEBUG
+        
         # select the plan which is best for the given policy
-        optimal_plan, plans = plans[0], plans[1:]
-        for plan in plans:
-            optimal_plan = optimal_plan if policy.choose(optimal_plan.plan_cost, plan.plan_cost) else plan
+#         optimal_plan, plans = plans[0], plans[1:]
+        
+#         print(f"Number of Plans After Filter Policy Constraint: {len(plans)}\n")
+        
+#         for plan in plans:
+#             optimal_plan = optimal_plan if policy.choose(optimal_plan.plan_cost, plan.plan_cost) else plan
 
-        plans = [optimal_plan]
-        logger.info(f"Done getting pareto optimal plans for final group id: {final_group_id}")
+#         plans = [optimal_plan]
+#         logger.info(f"Done getting pareto optimal plans for final group id: {final_group_id}")
+
+        # END DEBUG
+    
+    
+        # CLAIM_1
+        # sort the plans based on choose comparator and take the top 5
+        
+        def compare_plans(plan1, plan2):
+            if policy.choose(plan1.plan_cost, plan2.plan_cost):
+                return -1
+            elif policy.choose(plan2.plan_cost, plan1.plan_cost):
+                return 1
+            return 0
+        
+        plans.sort(key=cmp_to_key(compare_plans))
+        
+        plans = plans[:1]
+        
+        # END CLAIM_1
+        
+        
         return plans
     
 

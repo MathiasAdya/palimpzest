@@ -322,12 +322,36 @@ class DataRecord:
                     dct[k] = "<bytes>"
 
         if bytes_to_str:
+            # DEBUG 
+            # for k, v in dct.items():
+            #     if isinstance(v, bytes):
+            #         dct[k] = v.decode("utf-8")
+            #     elif isinstance(v, list) and len(v) > 0 and any([isinstance(elt, bytes) for elt in v]):
+            #         dct[k] = [elt.decode("utf-8") if isinstance(elt, bytes) else elt for elt in v]
+            # END DEBUG
             for k, v in dct.items():
                 if isinstance(v, bytes):
-                    dct[k] = v.decode("utf-8")
+                    # --- MODIFIKASI: Gunakan errors='replace' atau fallback ke str() ---
+                    try:
+                        dct[k] = v.decode("utf-8")
+                    except UnicodeDecodeError:
+                        # Jika gagal decode (file biner), ubah representasi bytes ke string aman
+                        dct[k] = str(v) 
+                    # -------------------------------------------------------------------
+                
                 elif isinstance(v, list) and len(v) > 0 and any([isinstance(elt, bytes) for elt in v]):
-                    dct[k] = [elt.decode("utf-8") if isinstance(elt, bytes) else elt for elt in v]
-
+                    # Lakukan hal yang sama untuk list of bytes
+                    new_list = []
+                    for elt in v:
+                        if isinstance(elt, bytes):
+                            try:
+                                new_list.append(elt.decode("utf-8"))
+                            except UnicodeDecodeError:
+                                new_list.append(str(elt))
+                        else:
+                            new_list.append(elt)
+                    dct[k] = new_list
+            
         if _sorted:
             dct = dict(sorted(dct.items()))
 

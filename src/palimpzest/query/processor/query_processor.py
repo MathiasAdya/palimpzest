@@ -99,14 +99,65 @@ class QueryProcessor:
     def _execute_best_plan(self, dataset: Dataset, optimizer: Optimizer) -> tuple[list[DataRecord], list[PlanStats]]:
         # get the optimal plan according to the optimizer
         plans = optimizer.optimize(dataset)
+        
+        print(f"After Optimizing, array plans have the size of: {len(plans)}\n")
+        
+        # DEBUG
         final_plan = plans[0]
 
         # execute the plan
         records, plan_stats = self.execution_strategy.execute_plan(plan=final_plan)
 
+        
+        # END DEBUG
+    
+        # CLAIM_1
+        # run all plans from optimizer_strategy.py in a sorted order (topk=5)
+        
+#         all_records = []
+#         all_plans_stats = []
+        
+#         for i, plan in enumerate(plans):
+#             # execute plan_i
+#             records, plan_stats = self.execution_strategy.execute_plan(plan=plan)
+            
+#             # append the records and stats
+#             all_records.extend(records)
+#             all_plans_stats.append(plan_stats)
+        
+        # DEBUG
         # return the output records and plan stats
         return records, [plan_stats]
+        # END DEBUG
+        
+        # return all records and plan stats
+        # return all_records, all_plans_stats
+    
+    # DEBUG
+    # For Top - K
+    def _execute_plans(self, dataset: Dataset, optimizer: Optimizer) -> list[tuple[list[DataRecord], PlanStats]]:
+        # 1. Get ALL plans (Top K) from the optimizer
+        plans = optimizer.optimize(dataset)
+        
+        results_list = []
 
+        print(f"Executing {len(plans)} plans...")
+
+        # 2. Execute EACH plan individually
+        for i, plan in enumerate(plans):
+            # Execute specific plan
+            records, plan_stats = self.execution_strategy.execute_plan(plan=plan)
+            
+            # Store the tuple (records, stats) for this specific plan
+            results_list.append((records, plan_stats))
+
+        # Returns a list of tuples: [(records_1, stats_1), (records_2, stats_2), ...]
+        return results_list
+    # END DEBUG
+    
+    
+    # DEBUG
+    # we want to return K plans from execute()
     def execute(self) -> DataRecordCollection:
         logger.info(f"Executing {self.__class__.__name__}")
 
@@ -137,16 +188,72 @@ class QueryProcessor:
             # construct the CostModel with any sample execution data we've gathered
             cost_model = SampleBasedCostModel(sentinel_plan_stats, self.verbose)
             self.optimizer.update_cost_model(cost_model)
-
+            
+        plan_results = self._execute_plans(self.dataset, self.optimizer)
+        output_collections = []
+        
         # execute plan(s) according to the optimization strategy
-        records, plan_stats = self._execute_best_plan(self.dataset, self.optimizer)
+        for records, plan_stats in plan_results:
+            # Add stats to global execution tracker (optional, but good for logging)
+            execution_stats.add_plan_stats(plan_stats)
+            
+            # Create a dedicated collection for THIS plan
+            # We create a specific execution_stats wrapper for this result so it feels complete
+            single_plan_exec_stats = ExecutionStats(execution_id=self.execution_id())
+            single_plan_exec_stats.add_plan_stats(plan_stats)
+            
+            collection = DataRecordCollection(records, execution_stats=single_plan_exec_stats)
+            output_collections.append(collection)
 
-        # update the execution stats to account for the work to execute the final plan
-        execution_stats.add_plan_stats(plan_stats)
         execution_stats.finish()
-
-        # construct and return the DataRecordCollection
-        result = DataRecordCollection(records, execution_stats=execution_stats)
         logger.info(f"Done executing {self.__class__.__name__}")
 
-        return result
+        # 3. Return the array of collections
+        return output_collections
+    # END DEBUG
+
+        
+        
+#     def execute(self) -> DataRecordCollection:
+#         logger.info(f"Executing {self.__class__.__name__}")
+
+#         # create execution stats
+#         execution_stats = ExecutionStats(execution_id=self.execution_id())
+#         execution_stats.start()
+
+#         # if the user provides a validator, we perform optimization
+#         if self.validator is not None:
+#             # create sentinel plan
+#             sentinel_plan = self._create_sentinel_plan(self.train_dataset)
+
+#             # generate sample execution data
+#             if self.train_dataset is not None:
+#                 sentinel_plan_stats = self.sentinel_execution_strategy.execute_sentinel_plan(sentinel_plan, self.train_dataset, self.validator)
+
+#             else:
+#                 train_dataset = self.dataset._get_root_datasets()
+#                 sentinel_plan_stats = self.sentinel_execution_strategy.execute_sentinel_plan(sentinel_plan, train_dataset, self.validator)
+
+#             # update the execution stats to account for the work done in optimization
+#             execution_stats.add_plan_stats(sentinel_plan_stats)
+#             execution_stats.finish_optimization()
+
+#             # (re-)initialize the optimizer
+#             self.optimizer = self.optimizer.deepcopy_clean()
+
+#             # construct the CostModel with any sample execution data we've gathered
+#             cost_model = SampleBasedCostModel(sentinel_plan_stats, self.verbose)
+#             self.optimizer.update_cost_model(cost_model)
+
+#         # execute plan(s) according to the optimization strategy
+#         records, plan_stats = self._execute_best_plan(self.dataset, self.optimizer)
+
+#         # update the execution stats to account for the work to execute the final plan
+#         execution_stats.add_plan_stats(plan_stats)
+#         execution_stats.finish()
+
+#         # construct and return the DataRecordCollection
+#         result = DataRecordCollection(records, execution_stats=execution_stats)
+#         logger.info(f"Done executing {self.__class__.__name__}")
+
+#         return result

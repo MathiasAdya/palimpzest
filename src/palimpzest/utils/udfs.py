@@ -31,26 +31,65 @@ def file_to_xls(candidate: dict):
     return {"number_sheets": len(xls.sheet_names), "sheet_names": xls.sheet_names}
 
 
+# def xls_to_tables(candidate: dict):
+#     """Function used to convert a DataRecord instance of XLSFile to a Table DataRecord."""
+#     xls_bytes = candidate["contents"]
+#     sheet_names = candidate["sheet_names"]
+
+#     records = []
+#     for sheet_name in sheet_names:
+#         dataframe = pd.read_excel(io.BytesIO(xls_bytes), sheet_name=sheet_name, engine="openpyxl")
+
+#         # TODO extend number of rows with dynamic sizing of context length
+#         # construct data record
+#         record = {}
+#         rows = []
+#         for row in dataframe.values[:100]:
+#             row_record = [str(x) for x in row]
+#             rows += [row_record]
+#         record["rows"] = rows[:MAX_ROWS]
+#         record["filename"] = candidate["filename"]
+#         record["header"] = dataframe.columns.values.tolist()
+#         record["name"] = candidate["filename"].split("/")[-1] + "_" + sheet_name
+#         records.append(record)
+
+#     return records
+
 def xls_to_tables(candidate: dict):
-    """Function used to convert a DataRecord instance of XLSFile to a Table DataRecord."""
-    xls_bytes = candidate["contents"]
-    sheet_names = candidate["sheet_names"]
+    """Fungsi konversi dari XLSFile ke Table DataRecord."""
+    # Gunakan .get() agar aman jika key tidak ada
+    xls_bytes = candidate.get("contents")
+    sheet_names = candidate.get("sheet_names", [])
 
     records = []
     for sheet_name in sheet_names:
-        dataframe = pd.read_excel(io.BytesIO(xls_bytes), sheet_name=sheet_name, engine="openpyxl")
+        try:
+            # Baca Excel dari bytes
+            dataframe = pd.read_excel(io.BytesIO(xls_bytes), sheet_name=sheet_name, engine="openpyxl")
+        except Exception as e:
+            print(f"Skipping sheet {sheet_name}: {e}")
+            continue
 
-        # TODO extend number of rows with dynamic sizing of context length
-        # construct data record
         record = {}
         rows = []
-        for row in dataframe.values[:100]:
-            row_record = [str(x) for x in row]
-            rows += [row_record]
-        record["rows"] = rows[:MAX_ROWS]
-        record["filename"] = candidate["filename"]
-        record["header"] = dataframe.columns.values.tolist()
-        record["name"] = candidate["filename"].split("/")[-1] + "_" + sheet_name
+        
+        # --- BAGIAN KRUSIAL (PERBAIKAN) ---
+        # Masalah asli: row_record = [str(x) for x in row]  <-- Ini menghasilkan LIST
+        # Solusi: Gabungkan list tersebut menjadi STRING tunggal
+        for row in dataframe.values[:MAX_ROWS]:
+            row_string = ", ".join([str(x) for x in row]) # <-- Menghasilkan STRING "val1, val2"
+            rows.append(row_string)
+        # ----------------------------------
+
+        # Sekarang 'rows' adalah list of strings: ["val1, val2", "val3, val4"]
+        # Ini COCOK dengan skema list[str]
+        record["rows"] = rows 
+        
+        record["filename"] = candidate.get("filename", "unknown")
+        # Header juga harus list of strings
+        record["header"] = [str(h) for h in dataframe.columns.values.tolist()]
+        record["name"] = candidate.get("filename", "file").split("/")[-1] + "_" + sheet_name
+        
         records.append(record)
 
     return records
